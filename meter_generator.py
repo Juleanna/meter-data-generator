@@ -1,173 +1,112 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Виправлена версія генератора без помилок
+"""
+
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from datetime import datetime, timedelta
 import pandas as pd
 import random
-import openpyxl
-from openpyxl.chart import LineChart, Reference
-from openpyxl.utils.dataframe import dataframe_to_rows
-import os
 import calendar
 
-class DatePicker:
+# Спроба імпорту openpyxl
+try:
+    import openpyxl
+    from openpyxl.chart import LineChart, Reference
+    from openpyxl.utils.dataframe import dataframe_to_rows
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
+
+class SimpleCalendar:
     def __init__(self, parent):
         self.parent = parent
         self.selected_date = datetime.now()
         self.calendar_window = None
         
-    def create_date_picker_widget(self, row, column, text="Дата початку:"):
-        # Фрейм для дати
-        date_frame = ttk.Frame(self.parent)
-        date_frame.grid(row=row, column=0, columnspan=2, sticky=tk.W, pady=5)
-        
-        # Лейбл
-        ttk.Label(date_frame, text=text).grid(row=0, column=0, sticky=tk.W)
-        
-        # Поле відображення вибраної дати
-        self.date_var = tk.StringVar(value=self.selected_date.strftime("%d.%m.%Y"))
-        self.date_display = ttk.Entry(date_frame, textvariable=self.date_var, 
-                                     state="readonly", width=12)
-        self.date_display.grid(row=0, column=1, padx=(10, 5))
-        
-        # Кнопка календаря
-        calendar_btn = ttk.Button(date_frame, text="📅", width=3, 
-                                 command=self.open_calendar)
-        calendar_btn.grid(row=0, column=2)
-        
-        # Кнопка "Сьогодні"
-        today_btn = ttk.Button(date_frame, text="Сьогодні", 
-                              command=self.set_today)
-        today_btn.grid(row=0, column=3, padx=(5, 0))
-        
-        return date_frame
+        # Українські назви
+        self.month_names = ["", "Січень", "Лютий", "Березень", "Квітень", "Травень", 
+                           "Червень", "Липень", "Серпень", "Вересень", 
+                           "Жовтень", "Листопад", "Грудень"]
     
-    def set_today(self):
-        self.selected_date = datetime.now()
-        self.date_var.set(self.selected_date.strftime("%d.%m.%Y"))
-    
-    def open_calendar(self):
+    def open_calendar(self, date_var, button):
         if self.calendar_window:
             self.calendar_window.destroy()
             
         self.calendar_window = tk.Toplevel(self.parent)
-        self.calendar_window.title("Вибір дати")
-        self.calendar_window.geometry("300x400")
+        self.calendar_window.title("Календар")
+        self.calendar_window.geometry("300x350")
         self.calendar_window.resizable(False, False)
-        self.calendar_window.transient(self.parent.winfo_toplevel())
-        self.calendar_window.grab_set()
         
-        # Центрування вікна
-        self.center_window(self.calendar_window, 300, 400)
+        # Позиціонування
+        try:
+            button_x = button.winfo_rootx()
+            button_y = button.winfo_rooty() + button.winfo_height()
+            self.calendar_window.geometry(f"300x350+{button_x}+{button_y}")
+        except:
+            pass
         
-        # Поточні рік та місяць
         self.current_year = self.selected_date.year
         self.current_month = self.selected_date.month
+        self.date_var = date_var
         
-        self.create_calendar_interface()
+        self.create_calendar_content()
     
-    def center_window(self, window, width, height):
-        # Отримання розмірів екрану
-        screen_width = window.winfo_screenwidth()
-        screen_height = window.winfo_screenheight()
+    def create_calendar_content(self):
+        # Заголовок
+        header = tk.Frame(self.calendar_window)
+        header.pack(pady=10)
         
-        # Розрахунок позиції
-        x = (screen_width // 2) - (width // 2)
-        y = (screen_height // 2) - (height // 2)
+        tk.Button(header, text="◄", width=3, command=self.prev_month).pack(side=tk.LEFT)
         
-        window.geometry(f"{width}x{height}+{x}+{y}")
-    
-    def create_calendar_interface(self):
-        # Очищення вікна
-        for widget in self.calendar_window.winfo_children():
-            widget.destroy()
+        month_label = tk.Label(header, text=f"{self.month_names[self.current_month]} {self.current_year}",
+                              font=("Arial", 12, "bold"))
+        month_label.pack(side=tk.LEFT, padx=20)
         
-        # Заголовок з навігацією
-        header_frame = ttk.Frame(self.calendar_window)
-        header_frame.pack(pady=10)
+        tk.Button(header, text="►", width=3, command=self.next_month).pack(side=tk.LEFT)
         
-        # Кнопка попереднього року
-        ttk.Button(header_frame, text="<<", width=3, 
-                  command=self.prev_year).grid(row=0, column=0)
+        # Календар
+        cal_frame = tk.Frame(self.calendar_window)
+        cal_frame.pack(pady=10)
         
-        # Кнопка попереднього місяця
-        ttk.Button(header_frame, text="<", width=3, 
-                  command=self.prev_month).grid(row=0, column=1)
-        
-        # Назва місяця та року
-        month_names = ["", "Січень", "Лютий", "Березень", "Квітень", "Травень", 
-                      "Червень", "Липень", "Серпень", "Вересень", 
-                      "Жовтень", "Листопад", "Грудень"]
-        
-        month_label = ttk.Label(header_frame, 
-                               text=f"{month_names[self.current_month]} {self.current_year}",
-                               font=("Arial", 12, "bold"))
-        month_label.grid(row=0, column=2, padx=20)
-        
-        # Кнопка наступного місяця
-        ttk.Button(header_frame, text=">", width=3, 
-                  command=self.next_month).grid(row=0, column=3)
-        
-        # Кнопка наступного року
-        ttk.Button(header_frame, text=">>", width=3, 
-                  command=self.next_year).grid(row=0, column=4)
-        
-        # Календарна сітка
-        calendar_frame = ttk.Frame(self.calendar_window)
-        calendar_frame.pack(pady=10)
-        
-        # Заголовки днів тижня
+        # Дні тижня
         days = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"]
         for i, day in enumerate(days):
-            label = ttk.Label(calendar_frame, text=day, font=("Arial", 10, "bold"))
-            label.grid(row=0, column=i, padx=2, pady=2)
+            tk.Label(cal_frame, text=day, font=("Arial", 9, "bold"), width=4).grid(row=0, column=i)
         
-        # Генерація календаря
+        # Дні місяця
         cal = calendar.monthcalendar(self.current_year, self.current_month)
-        
         for week_num, week in enumerate(cal, 1):
             for day_num, day in enumerate(week):
                 if day == 0:
-                    # Порожня комірка
-                    ttk.Label(calendar_frame, text="").grid(row=week_num, column=day_num, 
-                                                           padx=2, pady=2)
+                    tk.Label(cal_frame, text="", width=4).grid(row=week_num, column=day_num)
                 else:
-                    # Кнопка дня
-                    day_btn = tk.Button(calendar_frame, text=str(day), width=3, height=1,
-                                       command=lambda d=day: self.select_date(d))
+                    btn = tk.Button(cal_frame, text=str(day), width=3, height=1,
+                                   command=lambda d=day: self.select_date(d))
                     
                     # Виділення поточної дати
-                    if (day == self.selected_date.day and 
-                        self.current_month == self.selected_date.month and 
-                        self.current_year == self.selected_date.year):
-                        day_btn.config(bg="#007ACC", fg="white", font=("Arial", 10, "bold"))
-                    
-                    # Виділення сьогоднішньої дати
                     today = datetime.now()
                     if (day == today.day and 
                         self.current_month == today.month and 
                         self.current_year == today.year):
-                        day_btn.config(bg="#90EE90")
+                        btn.config(bg='lightgreen')
                     
-                    day_btn.grid(row=week_num, column=day_num, padx=1, pady=1)
+                    # Виділення вибраної дати
+                    if (day == self.selected_date.day and 
+                        self.current_month == self.selected_date.month and 
+                        self.current_year == self.selected_date.year):
+                        btn.config(bg='lightblue')
+                    
+                    btn.grid(row=week_num, column=day_num, padx=1, pady=1)
         
-        # Кнопки управління
-        button_frame = ttk.Frame(self.calendar_window)
-        button_frame.pack(pady=20)
+        # Кнопки
+        btn_frame = tk.Frame(self.calendar_window)
+        btn_frame.pack(pady=10)
         
-        ttk.Button(button_frame, text="Сьогодні", 
-                  command=self.select_today).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="OK", 
-                  command=self.confirm_date).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Скасувати", 
-                  command=self.cancel_date).pack(side=tk.LEFT, padx=5)
-    
-    def prev_year(self):
-        self.current_year -= 1
-        self.create_calendar_interface()
-    
-    def next_year(self):
-        self.current_year += 1
-        self.create_calendar_interface()
+        tk.Button(btn_frame, text="Сьогодні", command=self.select_today).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Закрити", command=self.close_calendar).pack(side=tk.LEFT, padx=5)
     
     def prev_month(self):
         if self.current_month == 1:
@@ -175,7 +114,7 @@ class DatePicker:
             self.current_year -= 1
         else:
             self.current_month -= 1
-        self.create_calendar_interface()
+        self.update_calendar()
     
     def next_month(self):
         if self.current_month == 12:
@@ -183,224 +122,272 @@ class DatePicker:
             self.current_year += 1
         else:
             self.current_month += 1
-        self.create_calendar_interface()
+        self.update_calendar()
+    
+    def update_calendar(self):
+        for widget in self.calendar_window.winfo_children():
+            widget.destroy()
+        self.create_calendar_content()
     
     def select_date(self, day):
         self.selected_date = datetime(self.current_year, self.current_month, day)
-        self.create_calendar_interface()  # Оновити відображення
+        self.date_var.set(self.selected_date.strftime("%d.%m.%Y"))
+        self.close_calendar()
     
     def select_today(self):
         today = datetime.now()
         self.current_year = today.year
         self.current_month = today.month
         self.selected_date = today
-        self.create_calendar_interface()
-    
-    def confirm_date(self):
         self.date_var.set(self.selected_date.strftime("%d.%m.%Y"))
-        self.calendar_window.destroy()
-        self.calendar_window = None
+        self.close_calendar()
     
-    def cancel_date(self):
-        self.calendar_window.destroy()
-        self.calendar_window = None
-    
-    def get_date(self):
-        return self.selected_date
+    def close_calendar(self):
+        if self.calendar_window:
+            self.calendar_window.destroy()
+            self.calendar_window = None
 
 class MeterDataGenerator:
     def __init__(self, root):
         self.root = root
-        self.root.title("Генератор даних лічильників")
-        self.root.geometry("600x500")
-        self.root.configure(bg='#f0f0f0')
-        
-        # Стилі
-        style = ttk.Style()
-        style.theme_use('clam')
+        self.root.title("⚡ Генератор даних лічильників")
+        self.root.geometry("750x580")
+        self.root.configure(bg='#f8f9fa')
         
         self.create_widgets()
     
     def create_widgets(self):
-        # Головний фрейм
-        main_frame = ttk.Frame(self.root, padding="20")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        # Головний контейнер
+        main = tk.Frame(self.root, bg='#f8f9fa', padx=10, pady=8)
+        main.pack(fill=tk.BOTH, expand=True)
         
         # Заголовок
-        title_label = ttk.Label(main_frame, text="Генератор даних лічильників", 
-                               font=('Arial', 16, 'bold'))
-        title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20))
+        title = tk.Label(main, text="⚡ Генератор даних лічильників", 
+                        font=('Arial', 14, 'bold'), bg='#f8f9fa', fg='#2c3e50')
+        title.pack(pady=(0, 8))
         
-        # Дата початку
-        ttk.Label(main_frame, text="Дата початку (РРРР-ММ-ДД):").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.date_entry = ttk.Entry(main_frame, width=20)
-        self.date_entry.insert(0, "2024-01-01")
-        self.date_entry.grid(row=1, column=1, sticky=tk.W, pady=5)
+        # Контейнер форми
+        form = tk.Frame(main, bg='white', relief='solid', bd=1, padx=10, pady=8)
+        form.pack(fill=tk.BOTH, expand=True)
         
-        # Номер лічильника
-        ttk.Label(main_frame, text="Номер лічильника:").grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.meter_number_entry = ttk.Entry(main_frame, width=20)
-        self.meter_number_entry.insert(0, "001")
-        self.meter_number_entry.grid(row=2, column=1, sticky=tk.W, pady=5)
+        # РЯД 1: Дата + Час + Номер + Тип
+        row1 = tk.Frame(form, bg='white')
+        row1.pack(fill=tk.X, pady=(0, 8))
         
-        # Час початку
-        time_frame = ttk.Frame(main_frame)
-        time_frame.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=5)
+        # Дата
+        date_frame = tk.Frame(row1, bg='white')
+        date_frame.pack(side=tk.LEFT)
         
-        ttk.Label(time_frame, text="Час початку:").grid(row=0, column=0, sticky=tk.W)
+        tk.Label(date_frame, text="📅 Дата:", font=('Arial', 9, 'bold'), 
+                bg='white').pack(anchor=tk.W)
+        
+        date_input = tk.Frame(date_frame, bg='white')
+        date_input.pack()
+        
+        self.date_var = tk.StringVar(value=datetime.now().strftime("%d.%m.%Y"))
+        date_entry = tk.Entry(date_input, textvariable=self.date_var, state="readonly", 
+                             width=9, font=('Arial', 9))
+        date_entry.pack(side=tk.LEFT)
+        
+        self.calendar = SimpleCalendar(form)
+        cal_btn = tk.Button(date_input, text="📅", width=2, height=1, font=('Arial', 8),
+                           command=lambda: self.calendar.open_calendar(self.date_var, cal_btn))
+        cal_btn.pack(side=tk.LEFT, padx=(1, 0))
+        
+        # Час
+        time_frame = tk.Frame(row1, bg='white')
+        time_frame.pack(side=tk.LEFT, padx=(15, 0))
+        
+        tk.Label(time_frame, text="🕐 Час:", font=('Arial', 9, 'bold'), 
+                bg='white').pack(anchor=tk.W)
+        
+        time_input = tk.Frame(time_frame, bg='white')
+        time_input.pack()
         
         self.hour_var = tk.StringVar(value="00")
         self.minute_var = tk.StringVar(value="00")
         
-        hour_spinbox = ttk.Spinbox(time_frame, from_=0, to=23, width=5, 
-                                  textvariable=self.hour_var, format="%02.0f")
-        hour_spinbox.grid(row=0, column=1, padx=(10, 5))
+        hour_spin = tk.Spinbox(time_input, from_=0, to=23, width=3, textvariable=self.hour_var,
+                              font=('Arial', 9))
+        hour_spin.pack(side=tk.LEFT)
         
-        ttk.Label(time_frame, text=":").grid(row=0, column=2)
+        tk.Label(time_input, text=":", bg='white', font=('Arial', 10)).pack(side=tk.LEFT)
         
-        minute_spinbox = ttk.Spinbox(time_frame, values=[f"{i:02d}" for i in range(0, 60, 10)], 
-                                   width=5, textvariable=self.minute_var)
-        minute_spinbox.grid(row=0, column=3, padx=(5, 0))
+        minute_spin = tk.Spinbox(time_input, values=[f"{i:02d}" for i in range(0, 60, 10)], 
+                                width=3, textvariable=self.minute_var, font=('Arial', 9))
+        minute_spin.pack(side=tk.LEFT)
         
-        # Діапазон напруги
-        ttk.Label(main_frame, text="Мінімальна напруга (В):").grid(row=4, column=0, sticky=tk.W, pady=5)
-        self.min_voltage_entry = ttk.Entry(main_frame, width=20)
-        self.min_voltage_entry.insert(0, "220.00")
-        self.min_voltage_entry.grid(row=4, column=1, sticky=tk.W, pady=5)
+        # Номер лічільника
+        num_frame = tk.Frame(row1, bg='white')
+        num_frame.pack(side=tk.LEFT, padx=(15, 0))
         
-        ttk.Label(main_frame, text="Максимальна напруга (В):").grid(row=5, column=0, sticky=tk.W, pady=5)
-        self.max_voltage_entry = ttk.Entry(main_frame, width=20)
-        self.max_voltage_entry.insert(0, "240.00")
-        self.max_voltage_entry.grid(row=5, column=1, sticky=tk.W, pady=5)
+        tk.Label(num_frame, text="🔢 Номер:", font=('Arial', 9, 'bold'), 
+                bg='white').pack(anchor=tk.W)
+        self.meter_entry = tk.Entry(num_frame, width=8, font=('Arial', 9))
+        self.meter_entry.insert(0, "001")
+        self.meter_entry.pack()
         
-        # Тип лічильника
-        ttk.Label(main_frame, text="Тип лічильника:").grid(row=6, column=0, sticky=tk.W, pady=5)
-        self.meter_type_var = tk.StringVar(value="1-фазний")
-        meter_type_combo = ttk.Combobox(main_frame, textvariable=self.meter_type_var, 
-                                       values=["1-фазний", "3-фазний"], state="readonly", width=17)
-        meter_type_combo.grid(row=6, column=1, sticky=tk.W, pady=5)
+        # Тип лічільника
+        type_frame = tk.Frame(row1, bg='white')
+        type_frame.pack(side=tk.LEFT, padx=(15, 0))
         
-        # Кнопки
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=7, column=0, columnspan=2, pady=(30, 10))
+        tk.Label(type_frame, text="⚙️ Тип:", font=('Arial', 9, 'bold'), 
+                bg='white').pack(anchor=tk.W)
+        self.meter_type = tk.StringVar(value="1-фазний")
+        type_combo = ttk.Combobox(type_frame, textvariable=self.meter_type, 
+                                 values=["1-фазний", "3-фазний"], state="readonly", 
+                                 width=9, font=('Arial', 9))
+        type_combo.pack()
         
-        generate_btn = ttk.Button(button_frame, text="Генерувати дані", 
-                                command=self.generate_data, style='Accent.TButton')
-        generate_btn.pack(side=tk.LEFT, padx=(0, 10))
+        # РЯД 2: Напруга
+        row2 = tk.Frame(form, bg='white')
+        row2.pack(fill=tk.X, pady=(0, 8))
         
-        save_btn = ttk.Button(button_frame, text="Зберегти Excel", 
-                            command=self.save_excel)
-        save_btn.pack(side=tk.LEFT)
+        # Мін напруга
+        min_frame = tk.Frame(row2, bg='white')
+        min_frame.pack(side=tk.LEFT)
         
-        # Прогрес бар
-        self.progress = ttk.Progressbar(main_frame, length=400, mode='determinate')
-        self.progress.grid(row=8, column=0, columnspan=2, pady=10, sticky=(tk.W, tk.E))
+        tk.Label(min_frame, text="⚡ Мін. (В):", font=('Arial', 9, 'bold'), 
+                bg='white').pack(anchor=tk.W)
+        self.min_volt = tk.Entry(min_frame, width=10, font=('Arial', 9))
+        self.min_volt.insert(0, "220.00")
+        self.min_volt.pack()
         
-        # Статус
-        self.status_label = ttk.Label(main_frame, text="Готово до роботи", 
-                                    foreground='green')
-        self.status_label.grid(row=9, column=0, columnspan=2, pady=5)
+        # Макс напруга
+        max_frame = tk.Frame(row2, bg='white')
+        max_frame.pack(side=tk.LEFT, padx=(20, 0))
+        
+        tk.Label(max_frame, text="⚡ Макс. (В):", font=('Arial', 9, 'bold'), 
+                bg='white').pack(anchor=tk.W)
+        self.max_volt = tk.Entry(max_frame, width=10, font=('Arial', 9))
+        self.max_volt.insert(0, "240.00")
+        self.max_volt.pack()
+        
+        # РЯД 3: Кнопки
+        row3 = tk.Frame(form, bg='white')
+        row3.pack(fill=tk.X, pady=(0, 8))
+        
+        self.gen_btn = tk.Button(row3, text="⚡ Генерувати", font=('Arial', 10, 'bold'), 
+                                bg='#007bff', fg='white', padx=15, pady=5,
+                                command=self.generate_data)
+        self.gen_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        self.save_btn = tk.Button(row3, text="💾 Зберегти Excel", font=('Arial', 10, 'bold'),
+                                 bg='#28a745', fg='white', padx=15, pady=5,
+                                 command=self.save_excel)
+        self.save_btn.pack(side=tk.LEFT)
+        
+        # РЯД 4: Прогрес
+        row4 = tk.Frame(form, bg='white')
+        row4.pack(fill=tk.X, pady=(0, 5))
+        
+        tk.Label(row4, text="📊 Прогрес:", font=('Arial', 8, 'bold'), 
+                bg='white').pack(anchor=tk.W)
+        
+        self.progress = ttk.Progressbar(row4, length=320, mode='determinate')
+        self.progress.pack(fill=tk.X, pady=(1, 0))
+        
+        # РЯД 5: Статус
+        row5 = tk.Frame(form, bg='#e9ecef', relief='solid', bd=1, pady=3)
+        row5.pack(fill=tk.X)
+        
+        self.status = tk.Label(row5, text="✅ Готово до роботи", 
+                              font=('Arial', 9, 'bold'), fg='#28a745', bg='#e9ecef')
+        self.status.pack()
         
         self.data = None
     
-    def validate_input(self):
-        try:
-            # Перевірка дати
-            datetime.strptime(self.date_entry.get(), "%Y-%m-%d")
-            
-            # Перевірка напруги
-            min_voltage = float(self.min_voltage_entry.get())
-            max_voltage = float(self.max_voltage_entry.get())
-            
-            if min_voltage >= max_voltage:
-                raise ValueError("Мінімальна напруга повинна бути менше максимальної")
-            
-            # Перевірка номера лічильника
-            if not self.meter_number_entry.get().strip():
-                raise ValueError("Номер лічильника не може бути пустим")
-            
-            return True, min_voltage, max_voltage
-            
-        except ValueError as e:
-            messagebox.showerror("Помилка", f"Некоректні дані: {str(e)}")
-            return False, None, None
-    
     def generate_data(self):
-        valid, min_voltage, max_voltage = self.validate_input()
-        if not valid:
-            return
-        
-        self.status_label.config(text="Генерація даних...", foreground='blue')
-        self.progress['value'] = 0
-        self.root.update()
-        
         try:
-            # Початкові параметри
-            start_date = datetime.strptime(self.date_entry.get(), "%Y-%m-%d")
+            # Валідація
+            date_str = self.date_var.get()
+            start_date = datetime.strptime(date_str, "%d.%m.%Y")
             start_time = datetime.combine(start_date.date(), 
                                         datetime.strptime(f"{self.hour_var.get()}:{self.minute_var.get()}", 
                                                         "%H:%M").time())
             
-            meter_number = self.meter_number_entry.get().strip()
-            is_three_phase = self.meter_type_var.get() == "3-фазний"
+            meter_num = self.meter_entry.get().strip()
+            if not meter_num:
+                raise ValueError("Номер лічільника не може бути пустим")
             
-            # Генерація даних
+            min_volt = float(self.min_volt.get())
+            max_volt = float(self.max_volt.get())
+            
+            if min_volt >= max_volt:
+                raise ValueError("Мін. напруга повинна бути менше макс.")
+            
+            is_3phase = self.meter_type.get() == "3-фазний"
+            
+            # Генерація
+            self.status.config(text="🔄 Генерація даних...", fg='#007bff')
+            self.progress['value'] = 0
+            self.root.update()
+            
             data = []
             current_time = start_time
             
             for i in range(1200):
                 row = {
-                    'Номер лічильника': meter_number,
+                    'Номер лічільника': meter_num,
                     'Дата': current_time.strftime("%Y-%m-%d"),
                     'Час': current_time.strftime("%H:%M"),
-                    'Фаза A': round(random.uniform(min_voltage, max_voltage), 2)
+                    'Фаза A': round(random.uniform(min_volt, max_volt), 2)
                 }
                 
-                if is_three_phase:
-                    row['Фаза B'] = round(random.uniform(min_voltage, max_voltage), 2)
-                    row['Фаза C'] = round(random.uniform(min_voltage, max_voltage), 2)
+                if is_3phase:
+                    row['Фаза B'] = round(random.uniform(min_volt, max_volt), 2)
+                    row['Фаза C'] = round(random.uniform(min_volt, max_volt), 2)
                 
                 data.append(row)
                 current_time += timedelta(minutes=10)
                 
                 # Оновлення прогресу
-                if i % 50 == 0:
-                    self.progress['value'] = (i / 1200) * 100
+                if i % 60 == 0:
+                    progress_val = (i / 1200) * 100
+                    self.progress['value'] = progress_val
+                    self.status.config(text=f"🔄 Генерація: {i}/1200 ({progress_val:.0f}%)")
                     self.root.update()
             
             self.data = pd.DataFrame(data)
             self.progress['value'] = 100
-            self.status_label.config(text=f"Згенеровано {len(data)} записів", foreground='green')
+            self.status.config(text=f"✅ Згенеровано {len(data)} записів!", fg='#28a745')
             
         except Exception as e:
-            messagebox.showerror("Помилка", f"Помилка генерації даних: {str(e)}")
-            self.status_label.config(text="Помилка генерації", foreground='red')
+            messagebox.showerror("Помилка", str(e))
+            self.status.config(text="❌ Помилка генерації", fg='#dc3545')
+            self.progress['value'] = 0
     
     def save_excel(self):
         if self.data is None:
-            messagebox.showwarning("Попередження", "Спочатку згенеруйте дані")
+            messagebox.showwarning("Увага", "Спочатку згенеруйте дані")
             return
         
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".xlsx",
-            filetypes=[("Excel files", "*.xlsx")],
-            title="Зберегти файл Excel"
-        )
-        
-        if not file_path:
+        if not OPENPYXL_AVAILABLE:
+            messagebox.showerror("Помилка", "Потрібно встановити openpyxl:\npip install openpyxl")
             return
-        
-        self.status_label.config(text="Збереження Excel файлу...", foreground='blue')
-        self.progress['value'] = 0
-        self.root.update()
         
         try:
-            # Створення Excel файлу
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".xlsx",
+                filetypes=[("Excel files", "*.xlsx")]
+            )
+            
+            if not file_path:
+                return
+            
+            self.status.config(text="💾 Збереження...", fg='#007bff')
+            self.progress['value'] = 20
+            self.root.update()
+            
+            # Збереження Excel
             with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-                # Записуємо дані на перший лист
+                # Збереження даних
                 self.data.to_excel(writer, sheet_name='Дані', index=False)
                 
-                # Отримуємо workbook та worksheet
+                self.progress['value'] = 50
+                self.status.config(text="💾 Форматування...")
+                self.root.update()
+                
                 workbook = writer.book
                 worksheet = writer.sheets['Дані']
                 
@@ -416,91 +403,121 @@ class MeterDataGenerator:
                             pass
                     worksheet.column_dimensions[column_letter].width = max_length + 2
                 
-                self.progress['value'] = 50
+                self.progress['value'] = 70
+                self.status.config(text="📊 Створення діаграм...")
                 self.root.update()
                 
                 # Створення діаграми
-                self.create_chart(workbook)
+                self.create_simple_chart(workbook)
                 
-            self.progress['value'] = 100
-            self.status_label.config(text=f"Файл збережено: {file_path}", foreground='green')
-            messagebox.showinfo("Успіх", f"Файл Excel збережено:\n{file_path}")
+                self.progress['value'] = 100
+                self.root.update()
             
+            self.status.config(text="✅ Файл збережено!", fg='#28a745')
+            
+            # Запит на відкриття
+            if messagebox.askyesno("Успіх", f"Файл збережено:\n{file_path}\n\nВідкрити?"):
+                try:
+                    import os
+                    os.startfile(file_path)
+                except:
+                    pass
+                    
         except Exception as e:
-            messagebox.showerror("Помилка", f"Помилка збереження файлу: {str(e)}")
-            self.status_label.config(text="Помилка збереження", foreground='red')
+            messagebox.showerror("Помилка", f"Помилка збереження:\n{str(e)}")
+            self.status.config(text="❌ Помилка збереження", fg='#dc3545')
     
-    def create_chart(self, workbook):
-        # Створення другого листа для діаграми
-        chart_sheet = workbook.create_sheet(title="Діаграма")
-        
-        # Підготовка даних для діаграми (середні значення по годинах)
-        self.data['DateTime'] = pd.to_datetime(self.data['Дата'] + ' ' + self.data['Час'])
-        hourly_data = self.data.groupby(self.data['DateTime'].dt.floor('H')).agg({
-            'Фаза A': ['min', 'max', 'mean']
-        }).round(2)
-        
-        is_three_phase = 'Фаза B' in self.data.columns
-        
-        if is_three_phase:
-            hourly_data_b = self.data.groupby(self.data['DateTime'].dt.floor('H')).agg({
-                'Фаза B': ['min', 'max', 'mean']
+    def create_simple_chart(self, workbook):
+        """Створення простої діаграми без проблемних функцій"""
+        try:
+            # Створення листа діаграми
+            chart_sheet = workbook.create_sheet(title="Діаграма")
+            
+            # Підготовка даних (використовуємо 'h' замість 'H')
+            self.data['DateTime'] = pd.to_datetime(self.data['Дата'] + ' ' + self.data['Час'])
+            hourly_data = self.data.groupby(self.data['DateTime'].dt.floor('h')).agg({
+                'Фаза A': ['min', 'max', 'mean']
             }).round(2)
-            hourly_data_c = self.data.groupby(self.data['DateTime'].dt.floor('H')).agg({
-                'Фаза C': ['min', 'max', 'mean']
-            }).round(2)
-        
-        # Записуємо дані для діаграми
-        chart_data = []
-        for i, (timestamp, row) in enumerate(hourly_data.iterrows()):
-            chart_row = {
-                'Час': timestamp.strftime('%H:%M'),
-                'Фаза A (мін)': row[('Фаза A', 'min')],
-                'Фаза A (макс)': row[('Фаза A', 'max')],
-                'Фаза A (сер)': row[('Фаза A', 'mean')]
-            }
+            
+            is_three_phase = 'Фаза B' in self.data.columns
             
             if is_three_phase:
-                chart_row.update({
-                    'Фаза B (мін)': hourly_data_b.iloc[i][('Фаза B', 'min')],
-                    'Фаза B (макс)': hourly_data_b.iloc[i][('Фаза B', 'max')],
-                    'Фаза B (сер)': hourly_data_b.iloc[i][('Фаза B', 'mean')],
-                    'Фаза C (мін)': hourly_data_c.iloc[i][('Фаза C', 'min')],
-                    'Фаза C (макс)': hourly_data_c.iloc[i][('Фаза C', 'max')],
-                    'Фаза C (сер)': hourly_data_c.iloc[i][('Фаза C', 'mean')]
-                })
+                hourly_data_b = self.data.groupby(self.data['DateTime'].dt.floor('h')).agg({
+                    'Фаза B': ['min', 'max', 'mean']
+                }).round(2)
+                hourly_data_c = self.data.groupby(self.data['DateTime'].dt.floor('h')).agg({
+                    'Фаза C': ['min', 'max', 'mean']
+                }).round(2)
             
-            chart_data.append(chart_row)
-        
-        # Записуємо дані на лист діаграми
-        chart_df = pd.DataFrame(chart_data)
-        for r_idx, row in enumerate(dataframe_to_rows(chart_df, index=False, header=True), 1):
-            for c_idx, value in enumerate(row, 1):
-                chart_sheet.cell(row=r_idx, column=c_idx, value=value)
-        
-        # Створення лінійної діаграми
-        chart = LineChart()
-        chart.title = "Аналіз напруги по годинах"
-        chart.style = 10
-        chart.x_axis.title = 'Час'
-        chart.y_axis.title = 'Напруга (В)'
-        chart.width = 20
-        chart.height = 12
-        
-        # Дані для діаграми
-        data_range = Reference(chart_sheet, min_col=2, min_row=1, 
-                              max_col=len(chart_df.columns), max_row=len(chart_df) + 1)
-        cats = Reference(chart_sheet, min_col=1, min_row=2, max_row=len(chart_df) + 1)
-        
-        chart.add_data(data_range, titles_from_data=True)
-        chart.set_categories(cats)
-        
-        # Розміщення діаграми
-        chart_sheet.add_chart(chart, "A10")
+            # Створення таблиці даних
+            chart_data = []
+            for i, (timestamp, row) in enumerate(hourly_data.iterrows()):
+                chart_row = {
+                    'Час': timestamp.strftime('%H:%M'),
+                    'Фаза A мін': row[('Фаза A', 'min')],
+                    'Фаза A макс': row[('Фаза A', 'max')],
+                    'Фаза A сер': row[('Фаза A', 'mean')]
+                }
+                
+                if is_three_phase:
+                    chart_row.update({
+                        'Фаза B мін': hourly_data_b.iloc[i][('Фаза B', 'min')],
+                        'Фаза B макс': hourly_data_b.iloc[i][('Фаза B', 'max')],
+                        'Фаза B сер': hourly_data_b.iloc[i][('Фаза B', 'mean')],
+                        'Фаза C мін': hourly_data_c.iloc[i][('Фаза C', 'min')],
+                        'Фаза C макс': hourly_data_c.iloc[i][('Фаза C', 'max')],
+                        'Фаза C сер': hourly_data_c.iloc[i][('Фаза C', 'mean')]
+                    })
+                
+                chart_data.append(chart_row)
+            
+            # Записуємо дані на лист
+            chart_df = pd.DataFrame(chart_data)
+            for r_idx, row in enumerate(dataframe_to_rows(chart_df, index=False, header=True), 1):
+                for c_idx, value in enumerate(row, 1):
+                    chart_sheet.cell(row=r_idx, column=c_idx, value=value)
+            
+            # Створення діаграми
+            chart = LineChart()
+            chart.title = "Аналіз напруги по годинах"
+            chart.style = 2
+            chart.x_axis.title = 'Проміжок часу (години)'
+            chart.y_axis.title = 'Напруга (В)'
+            chart.width = 20
+            chart.height = 12
+            
+            # Додавання даних до діаграми
+            data_range = Reference(chart_sheet, min_col=2, min_row=1, 
+                                  max_col=len(chart_df.columns), max_row=len(chart_df) + 1)
+            cats = Reference(chart_sheet, min_col=1, min_row=2, max_row=len(chart_df) + 1)
+            
+            chart.add_data(data_range, titles_from_data=True)
+            chart.set_categories(cats)
+            
+            # Розміщення діаграми
+            chart_sheet.add_chart(chart, "A15")
+            
+        except Exception as e:
+            print(f"Помилка створення діаграми: {e}")
+            # Продовжуємо без діаграми
 
 def main():
     root = tk.Tk()
     app = MeterDataGenerator(root)
+    
+    # Центрування для маленького екрану
+    root.update_idletasks()
+    w = root.winfo_reqwidth()
+    h = root.winfo_reqheight()
+    
+    screen_w = root.winfo_screenwidth()
+    screen_h = root.winfo_screenheight()
+    
+    x = (screen_w - w) // 2
+    y = max(10, (screen_h - h) // 2 - 50)
+    
+    root.geometry(f"{w}x{h}+{x}+{y}")
+    
     root.mainloop()
 
 if __name__ == "__main__":
