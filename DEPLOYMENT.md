@@ -50,8 +50,8 @@ git commit -m "🎉 Початковий реліз - Генератор дан�
 # Налаштування основної гілки
 git branch -M main
 
-# Підключення до віддаленого репозиторію (замініть YOUR_USERNAME на ваш GitHub логін)
-git remote add origin https://github.com/YOUR_USERNAME/meter-data-generator.git
+# Підключення до віддаленого репозиторію 
+git remote add origin https://github.com/Juleanna/meter-data-generator.git
 
 # Завантаження на GitHub
 git push -u origin main
@@ -112,7 +112,7 @@ pyinstaller --onefile --windowed --name "MeterGenerator" --add-data "README.md;.
 3. **Branch**: main / (root)
 4. **Save**
 
-Ваша сторінка буде доступна за адресою: `https://YOUR_USERNAME.github.io/meter-data-generator`
+Ваша сторінка буде доступна за адресою: `https://Juleanna.github.io/meter-data-generator`
 
 ## Крок 6: Додавання тем та міток
 

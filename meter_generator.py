@@ -7,6 +7,206 @@ import openpyxl
 from openpyxl.chart import LineChart, Reference
 from openpyxl.utils.dataframe import dataframe_to_rows
 import os
+import calendar
+
+class DatePicker:
+    def __init__(self, parent):
+        self.parent = parent
+        self.selected_date = datetime.now()
+        self.calendar_window = None
+        
+    def create_date_picker_widget(self, row, column, text="Дата початку:"):
+        # Фрейм для дати
+        date_frame = ttk.Frame(self.parent)
+        date_frame.grid(row=row, column=0, columnspan=2, sticky=tk.W, pady=5)
+        
+        # Лейбл
+        ttk.Label(date_frame, text=text).grid(row=0, column=0, sticky=tk.W)
+        
+        # Поле відображення вибраної дати
+        self.date_var = tk.StringVar(value=self.selected_date.strftime("%d.%m.%Y"))
+        self.date_display = ttk.Entry(date_frame, textvariable=self.date_var, 
+                                     state="readonly", width=12)
+        self.date_display.grid(row=0, column=1, padx=(10, 5))
+        
+        # Кнопка календаря
+        calendar_btn = ttk.Button(date_frame, text="📅", width=3, 
+                                 command=self.open_calendar)
+        calendar_btn.grid(row=0, column=2)
+        
+        # Кнопка "Сьогодні"
+        today_btn = ttk.Button(date_frame, text="Сьогодні", 
+                              command=self.set_today)
+        today_btn.grid(row=0, column=3, padx=(5, 0))
+        
+        return date_frame
+    
+    def set_today(self):
+        self.selected_date = datetime.now()
+        self.date_var.set(self.selected_date.strftime("%d.%m.%Y"))
+    
+    def open_calendar(self):
+        if self.calendar_window:
+            self.calendar_window.destroy()
+            
+        self.calendar_window = tk.Toplevel(self.parent)
+        self.calendar_window.title("Вибір дати")
+        self.calendar_window.geometry("300x400")
+        self.calendar_window.resizable(False, False)
+        self.calendar_window.transient(self.parent.winfo_toplevel())
+        self.calendar_window.grab_set()
+        
+        # Центрування вікна
+        self.center_window(self.calendar_window, 300, 400)
+        
+        # Поточні рік та місяць
+        self.current_year = self.selected_date.year
+        self.current_month = self.selected_date.month
+        
+        self.create_calendar_interface()
+    
+    def center_window(self, window, width, height):
+        # Отримання розмірів екрану
+        screen_width = window.winfo_screenwidth()
+        screen_height = window.winfo_screenheight()
+        
+        # Розрахунок позиції
+        x = (screen_width // 2) - (width // 2)
+        y = (screen_height // 2) - (height // 2)
+        
+        window.geometry(f"{width}x{height}+{x}+{y}")
+    
+    def create_calendar_interface(self):
+        # Очищення вікна
+        for widget in self.calendar_window.winfo_children():
+            widget.destroy()
+        
+        # Заголовок з навігацією
+        header_frame = ttk.Frame(self.calendar_window)
+        header_frame.pack(pady=10)
+        
+        # Кнопка попереднього року
+        ttk.Button(header_frame, text="<<", width=3, 
+                  command=self.prev_year).grid(row=0, column=0)
+        
+        # Кнопка попереднього місяця
+        ttk.Button(header_frame, text="<", width=3, 
+                  command=self.prev_month).grid(row=0, column=1)
+        
+        # Назва місяця та року
+        month_names = ["", "Січень", "Лютий", "Березень", "Квітень", "Травень", 
+                      "Червень", "Липень", "Серпень", "Вересень", 
+                      "Жовтень", "Листопад", "Грудень"]
+        
+        month_label = ttk.Label(header_frame, 
+                               text=f"{month_names[self.current_month]} {self.current_year}",
+                               font=("Arial", 12, "bold"))
+        month_label.grid(row=0, column=2, padx=20)
+        
+        # Кнопка наступного місяця
+        ttk.Button(header_frame, text=">", width=3, 
+                  command=self.next_month).grid(row=0, column=3)
+        
+        # Кнопка наступного року
+        ttk.Button(header_frame, text=">>", width=3, 
+                  command=self.next_year).grid(row=0, column=4)
+        
+        # Календарна сітка
+        calendar_frame = ttk.Frame(self.calendar_window)
+        calendar_frame.pack(pady=10)
+        
+        # Заголовки днів тижня
+        days = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"]
+        for i, day in enumerate(days):
+            label = ttk.Label(calendar_frame, text=day, font=("Arial", 10, "bold"))
+            label.grid(row=0, column=i, padx=2, pady=2)
+        
+        # Генерація календаря
+        cal = calendar.monthcalendar(self.current_year, self.current_month)
+        
+        for week_num, week in enumerate(cal, 1):
+            for day_num, day in enumerate(week):
+                if day == 0:
+                    # Порожня комірка
+                    ttk.Label(calendar_frame, text="").grid(row=week_num, column=day_num, 
+                                                           padx=2, pady=2)
+                else:
+                    # Кнопка дня
+                    day_btn = tk.Button(calendar_frame, text=str(day), width=3, height=1,
+                                       command=lambda d=day: self.select_date(d))
+                    
+                    # Виділення поточної дати
+                    if (day == self.selected_date.day and 
+                        self.current_month == self.selected_date.month and 
+                        self.current_year == self.selected_date.year):
+                        day_btn.config(bg="#007ACC", fg="white", font=("Arial", 10, "bold"))
+                    
+                    # Виділення сьогоднішньої дати
+                    today = datetime.now()
+                    if (day == today.day and 
+                        self.current_month == today.month and 
+                        self.current_year == today.year):
+                        day_btn.config(bg="#90EE90")
+                    
+                    day_btn.grid(row=week_num, column=day_num, padx=1, pady=1)
+        
+        # Кнопки управління
+        button_frame = ttk.Frame(self.calendar_window)
+        button_frame.pack(pady=20)
+        
+        ttk.Button(button_frame, text="Сьогодні", 
+                  command=self.select_today).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="OK", 
+                  command=self.confirm_date).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Скасувати", 
+                  command=self.cancel_date).pack(side=tk.LEFT, padx=5)
+    
+    def prev_year(self):
+        self.current_year -= 1
+        self.create_calendar_interface()
+    
+    def next_year(self):
+        self.current_year += 1
+        self.create_calendar_interface()
+    
+    def prev_month(self):
+        if self.current_month == 1:
+            self.current_month = 12
+            self.current_year -= 1
+        else:
+            self.current_month -= 1
+        self.create_calendar_interface()
+    
+    def next_month(self):
+        if self.current_month == 12:
+            self.current_month = 1
+            self.current_year += 1
+        else:
+            self.current_month += 1
+        self.create_calendar_interface()
+    
+    def select_date(self, day):
+        self.selected_date = datetime(self.current_year, self.current_month, day)
+        self.create_calendar_interface()  # Оновити відображення
+    
+    def select_today(self):
+        today = datetime.now()
+        self.current_year = today.year
+        self.current_month = today.month
+        self.selected_date = today
+        self.create_calendar_interface()
+    
+    def confirm_date(self):
+        self.date_var.set(self.selected_date.strftime("%d.%m.%Y"))
+        self.calendar_window.destroy()
+        self.calendar_window = None
+    
+    def cancel_date(self):
+        self.calendar_window.destroy()
+        self.calendar_window = None
+    
+    def get_date(self):
+        return self.selected_date
 
 class MeterDataGenerator:
     def __init__(self, root):
